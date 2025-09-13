@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Financial Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1f2937;
+            color: #d1d5db;
+        }
+        .card {
+            background-color: #374151;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .input-text, .btn {
+            outline: none !important;
+        }
+        .btn {
+            transition: background-color 0.2s, transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="p-6 md:p-10">
+
+    <header class="text-center mb-10">
+        <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-2">MyAI Finances</h1>
+        <p class="text-lg text-gray-400">Your personal AI-powered financial companion.</p>
+    </header>
+
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Predictive Spending Analysis -->
+        <div class="card rounded-2xl p-6 lg:col-span-2">
+            <h2 class="text-2xl font-bold mb-4 text-white">Predictive Spending Analysis</h2>
+            <p class="text-gray-400 mb-4">Your AI predicts your spending based on past trends. Stay ahead of your finances.</p>
+            <div class="relative w-full h-80">
+                <canvas id="spendingChart" class="w-full h-full"></canvas>
+            </div>
+            <div class="mt-4 text-center">
+                <span id="predictionMessage" class="font-semibold"></span>
+            </div>
+        </div>
+
+        <!-- Budget & Goal Tracking -->
+        <div class="card rounded-2xl p-6 flex flex-col justify-between">
+            <div>
+                <h2 class="text-2xl font-bold mb-4 text-white">Financial Goals & Alerts</h2>
+                
+                <!-- Savings Goal -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-2">Savings Goal</h3>
+                    <div class="w-full bg-gray-600 rounded-full h-3">
+                        <div id="goalProgress" class="bg-indigo-500 h-3 rounded-full transition-all duration-500" style="width: 0%;"></div>
+                    </div>
+                    <div class="flex justify-between text-sm mt-2">
+                        <span>$0</span>
+                        <span id="goalAmount">$5,000</span>
+                    </div>
+                </div>
+
+                <!-- Budget Alerts -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-2">Monthly Budget Alert</h3>
+                    <div class="p-4 rounded-xl border border-gray-600">
+                        <p id="budgetAlert" class="text-red-400 font-medium text-sm">You are on track to stay within your budget.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Category Update -->
+            <div class="mt-auto">
+                <button id="updateGoalsBtn" class="btn w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-500">
+                    Update Goals
+                </button>
+            </div>
+        </div>
+
+        <!-- Expense Categorization & Transaction List -->
+        <div class="card rounded-2xl p-6 lg:col-span-3">
+            <h2 class="text-2xl font-bold mb-4 text-white">Recent Transactions</h2>
+            <button id="categorizeBtn" class="btn bg-green-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-green-500 mb-4">
+                Categorize Expenses
+            </button>
+            
+            <div id="transactionList" class="space-y-4">
+                <!-- Transactions will be added here by JS -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal for Messages -->
+    <div id="modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity"></div>
+        <div class="bg-gray-800 rounded-2xl shadow-xl transform transition-all sm:max-w-lg w-full p-6 mx-4 z-50">
+            <div class="text-center">
+                <h3 id="modalTitle" class="text-xl font-bold mb-2 text-white"></h3>
+                <p id="modalMessage" class="text-gray-400 mb-4"></p>
+                <button id="closeModalBtn" class="btn bg-indigo-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-indigo-500">Close</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- Mock Data for Demonstration ---
+    const transactions = [
+        { id: 1, date: '2024-05-01', description: 'Groceries at Whole Foods', amount: 85.50, category: 'Uncategorized' },
+        { id: 2, date: '2024-05-02', description: 'Uber ride', amount: 15.20, category: 'Uncategorized' },
+        { id: 3, date: '2024-05-03', description: 'Dinner at The Italian Bistro', amount: 62.00, category: 'Uncategorized' },
+        { id: 4, date: '2024-05-04', description: 'Netflix Subscription', amount: 19.99, category: 'Uncategorized' },
+        { id: 5, date: '2024-05-05', description: 'Paycheck from Acme Corp', amount: 2500.00, type: 'income', category: 'Uncategorized' },
+    ];
+    const historicalSpending = [200, 220, 190, 240, 210, 280, 260];
+    const goalData = {
+        goalAmount: 5000,
+        savedAmount: 1800
+    };
+    const monthlyBudget = 1000;
+    const currentSpending = 850;
+
+    // --- DOM Elements ---
+    const transactionListEl = document.getElementById('transactionList');
+    const categorizeBtn = document.getElementById('categorizeBtn');
+    const spendingChartCanvas = document.getElementById('spendingChart');
+    const goalProgressEl = document.getElementById('goalProgress');
+    const budgetAlertEl = document.getElementById('budgetAlert');
+    const predictionMessageEl = document.getElementById('predictionMessage');
+    const modalEl = document.getElementById('modal');
+    const modalTitleEl = document.getElementById('modalTitle');
+    const modalMessageEl = document.getElementById('modalMessage');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+
+    // --- Utility Functions ---
+    function showModal(title, message) {
+        modalTitleEl.textContent = title;
+        modalMessageEl.textContent = message;
+        modalEl.classList.remove('hidden');
+    }
+
+    closeModalBtn.addEventListener('click', () => {
+        modalEl.classList.add('hidden');
+    });
+
+    // --- Expense Categorization Logic ---
+    function renderTransactions() {
+        transactionListEl.innerHTML = '';
+        transactions.forEach(t => {
+            const isIncome = t.type === 'income';
+            const transactionEl = document.createElement('div');
+            transactionEl.className = `p-4 rounded-xl border-2 ${isIncome ? 'border-green-600' : 'border-red-600'}`;
+            transactionEl.innerHTML = `
+                <div class="flex items-center justify-between flex-wrap">
+                    <span class="text-sm font-semibold">${t.description}</span>
+                    <span class="font-bold text-lg ${isIncome ? 'text-green-400' : 'text-red-400'}">
+                        ${isIncome ? '+' : '-'} $${t.amount.toFixed(2)}
+                    </span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-gray-400 mt-1">
+                    <span>${t.date}</span>
+                    <span class="bg-gray-600 px-2 py-1 rounded-full text-xs font-medium">
+                        ${t.category}
+                    </span>
+                </div>
+            `;
+            transactionListEl.appendChild(transactionEl);
+        });
+    }
+
+    function categorizeExpenses() {
+        showModal('Categorizing Expenses...', 'The AI is analyzing your transactions. This may take a moment.');
+        setTimeout(() => {
+            transactions.forEach(t => {
+                const desc = t.description.toLowerCase();
+                if (desc.includes('groceries') || desc.includes('foods')) {
+                    t.category = 'Groceries';
+                } else if (desc.includes('uber') || desc.includes('ride')) {
+                    t.category = 'Transportation';
+                } else if (desc.includes('dinner') || desc.includes('bistro')) {
+                    t.category = 'Dining Out';
+                } else if (desc.includes('netflix') || desc.includes('subscription')) {
+                    t.category = 'Entertainment';
+                } else if (desc.includes('paycheck')) {
+                    t.category = 'Income';
+                }
+            });
+            renderTransactions();
+            showModal('Categorization Complete!', 'Your expenses have been automatically categorized. Check out the updated list below.');
+        }, 1500);
+    }
+    
+    categorizeBtn.addEventListener('click', categorizeExpenses);
+
+    // --- Predictive Spending & Chart Logic ---
+    function drawChart() {
+        const ctx = spendingChartCanvas.getContext('2d');
+
+        // Mock data
+        const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+        const actualData = [...historicalSpending];
+        const predictedData = [null, null, null, null, null, null, Math.max(...historicalSpending) + 50]; // Simple prediction
+
+        // Simple chart drawing
+        const width = spendingChartCanvas.width;
+        const height = spendingChartCanvas.height;
+        const padding = 40;
+        const numPoints = actualData.length;
+        const xStep = (width - 2 * padding) / (labels.length - 1);
+        const yMax = Math.max(...actualData.filter(d => d !== null), ...predictedData.filter(d => d !== null));
+        const yStep = (height - 2 * padding) / yMax;
+
+        ctx.clearRect(0, 0, width, height);
+
+        // Draw grid lines
+        ctx.strokeStyle = '#4b5563';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i <= 5; i++) {
+            const y = height - padding - (i * (yMax / 5)) * yStep;
+            ctx.moveTo(padding, y);
+            ctx.lineTo(width - padding, y);
+            ctx.fillText(`$${i * (yMax / 5)}`, padding - 30, y + 4);
+        }
+        ctx.stroke();
+
+        // Draw line for actual spending
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        actualData.forEach((d, i) => {
+            const x = padding + i * xStep;
+            const y = height - padding - d * yStep;
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+            ctx.arc(x, y, 4, 0, 2 * Math.PI);
+        });
+        ctx.stroke();
+
+        // Draw predicted line (dashed)
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#818cf8';
+        ctx.beginPath();
+        ctx.moveTo(padding + (numPoints - 1) * xStep, height - padding - actualData[numPoints - 1] * yStep);
+        ctx.lineTo(padding + (numPoints) * xStep, height - padding - predictedData[numPoints] * yStep);
+        ctx.stroke();
+
+        // Draw labels
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#d1d5db';
+        labels.forEach((label, i) => {
+            ctx.fillText(label, padding + i * xStep - 10, height - padding + 20);
+        });
+
+        const currentPrediction = predictedData[predictedData.length - 1];
+        if (currentPrediction) {
+            predictionMessageEl.textContent = `Predicted spending for next month is $${currentPrediction.toFixed(2)}.`;
+        }
+    }
+
+    // --- Goal Tracking & Budget Alert Logic ---
+    function updateGoalProgress() {
+        const progress = (goalData.savedAmount / goalData.goalAmount) * 100;
+        goalProgressEl.style.width = `${Math.min(progress, 100)}%`;
+        document.getElementById('goalAmount').textContent = `$${goalData.savedAmount.toFixed(2)} / $${goalData.goalAmount.toFixed(2)}`;
+    }
+
+    function checkBudgetAlert() {
+        if (currentSpending >= monthlyBudget) {
+            budgetAlertEl.textContent = `Alert: You have exceeded your monthly budget of $${monthlyBudget.toFixed(2)}!`;
+            budgetAlertEl.className = 'text-red-400 font-medium text-sm';
+        } else if (currentSpending > monthlyBudget * 0.8) {
+            budgetAlertEl.textContent = `Warning: You are approaching your monthly budget of $${monthlyBudget.toFixed(2)}.`;
+            budgetAlertEl.className = 'text-yellow-400 font-medium text-sm';
+        } else {
+            budgetAlertEl.textContent = `You are on track to stay within your budget.`;
+            budgetAlertEl.className = 'text-green-400 font-medium text-sm';
+        }
+    }
+    
+    document.getElementById('updateGoalsBtn').addEventListener('click', () => {
+        showModal('Goals & Alerts Updated', 'Your goals and budget alerts have been refreshed with the latest data.');
+    });
+
+    // --- Initial Load ---
+    window.onload = () => {
+        renderTransactions();
+        drawChart();
+        updateGoalProgress();
+        checkBudgetAlert();
+    };
+
+</script>
+
+</body>
+</html>
+
